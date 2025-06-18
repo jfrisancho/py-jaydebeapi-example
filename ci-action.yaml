@@ -1,0 +1,9 @@
+- name: Run Path Analysis
+  run: |
+    python main.py --approach RANDOM --coverage-target 0.2 --unattended
+    if [ $? -eq 0 ]; then
+      echo "Path analysis completed successfully"
+    else
+      echo "Path analysis failed"
+      exit 1
+    fi
