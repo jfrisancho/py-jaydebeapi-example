@@ -28,7 +28,7 @@ Examples:
     python main.py
     python main.py -v                              # with verbose output
     python main.py --fab M16                       # specify fab
-    python main.py --coverage-target 0.3 -v       # custom coverage
+    python main.py --coverage-target 0.3 -v        # custom coverage
 
   Interactive mode (for exploration/training):
     python main.py --interactive
