@@ -39,13 +39,13 @@ Examples:
     python main.py -a RANDOM --method STRATIFIED --coverage-target 0.25
 
   Scenario approach (predefined paths by code or file):
-    python main.py -a SCENARIO --by-code "PREXXXXXXX"    # predefined scenario
-    python main.py -a SCENARIO --by-code "SYNXXXXXXX"    # synthetic scenario
-    python main.py -a SCENARIO --by-file "scenarios.json"
+    python main.py -a SCENARIO --scenario-code "PREXXXXXXX"    # predefined scenario
+    python main.py -a SCENARIO --scenario-code "SYNXXXXXXX"    # synthetic scenario
+    python main.py -a SCENARIO --scenario-file "scenarios.json"
 
   Silent unattended mode (for scripts/automation):
     python main.py --fab M16 --unattended
-    python main.py -a SCENARIO --by-code "PREXXXXXXX" --unattended
+    python main.py -a SCENARIO --scenario-code "PREXXXXXXX" --unattended
         """
     )
     
@@ -60,39 +60,40 @@ Examples:
     parser.add_argument(
         '--method',
         type=str,
-        help='Analysis method - only for RANDOM approach (SIMPLE/STRATIFIED) - defaults to SIMPLE'
+        choices=['SIMPLE', 'STRATIFIED'],
+        help='Analysis method for random - ignored for SCENARIO approach'
     )
     
     parser.add_argument(
         '--coverage-target',
         type=float,
         default=0.2,
-        help='Coverage target as decimal for RANDOM approach (default: 0.2 for 20%%) - ignored for SCENARIO'
+        help='Coverage target as decimal for RANDOM approach (default: 0.2 for 20%%) - ignored for SCENARIO approach'
     )
     
     parser.add_argument(
         '--fab',
         type=str,
-        help='Fabrication identifier for RANDOM approach (e.g., M16, M15) - ignored for SCENARIO'
+        help='Fabrication identifier for RANDOM approach (e.g., M16, M15) - ignored for SCENARIO approach'
     )
     
     parser.add_argument(
         '--toolset',
         type=str,
-        help='Toolset identifier for RANDOM approach (e.g., 6DXXXXXX) - ignored for SCENARIO'
+        help='Toolset identifier for RANDOM approach (e.g., 6DXXXXXX) - ignored for SCENARIO approach'
     )
     
     # SCENARIO approach arguments
     parser.add_argument(
-        '--by-code',
+        '--scenario-code',
         type=str,
-        help='Scenario code for SCENARIO approach (e.g., PREXXXXXXX for predefined, SYNXXXXXXX for synthetic)'
+        help='Scenario code for SCENARIO approach (e.g., PREXXXXXXX for predefined, SYNXXXXXXX for synthetic) - ignored for RANDOM approach'
     )
     
     parser.add_argument(
-        '--by-file',
+        '--scenario-file',
         type=str,
-        help='Scenario file path for SCENARIO approach (e.g., scenarios.json)'
+        help='Scenario file path for SCENARIO approach (e.g., scenarios.json) - ignored for RANDOM approach'
     )
     
     parser.add_argument(
@@ -102,21 +103,21 @@ Examples:
     )
     
     parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='Enable verbose output (ignored if --unattended is used)'
-    )
-    
-    parser.add_argument(
         '--unattended', '-u',
         action='store_true',
         help='Silent unattended mode - minimal output, no summary (for scripts/automation)'
     )
     
+    parser.add_argument(
+        '--verbose', '-v',
+        action='store_true',
+        help='Enable verbose output (ignored if --unattended is used) - ignored for unattended mode'
+    )
+    
     return parser
 
 
-def get_user_choice(prompt: str, choices: List[str], default_idx: int = 0) -> str:
+def fetch_user_choice(prompt: str, choices: List[str], default_idx: int = 0) -> str:
     """Get user choice from a list of options."""
     print(f"\n{prompt}")
     for i, choice in enumerate(choices, 1):
@@ -142,7 +143,7 @@ def get_user_choice(prompt: str, choices: List[str], default_idx: int = 0) -> st
             sys.exit(130)
 
 
-def get_float_input(prompt: str, default: float, min_val: float = 0.0, max_val: float = 1.0) -> float:
+def fetch_float_input(prompt: str, default: float, min_val: float = 0.0, max_val: float = 1.0) -> float:
     """Get float input from user with validation."""
     while True:
         try:
@@ -163,7 +164,7 @@ def get_float_input(prompt: str, default: float, min_val: float = 0.0, max_val: 
             sys.exit(130)
 
 
-def get_string_input(prompt: str, default: str = "", required: bool = False, available_options: List[str] = None) -> str:
+def fetch_string_input(prompt: str, default: str = "", required: bool = False, available_options: List[str] = None) -> str:
     """Get string input from user."""
     while True:
         try:
@@ -191,7 +192,7 @@ def get_string_input(prompt: str, default: str = "", required: bool = False, ava
             sys.exit(130)
 
 
-def get_available_fabs(db: Database) -> List[str]:
+def fetch_available_fabs(db: Database) -> List[str]:
     """Get available fabs from database."""
     try:
         sql = "SELECT DISTINCT fab FROM tb_runs ORDER BY fab"
@@ -207,7 +208,7 @@ def get_available_fabs(db: Database) -> List[str]:
         return ["M16", "M15", "M14", "M13"]  # Default options
 
 
-def get_available_scenarios(db: Database) -> List[str]:
+def fetch_available_scenarios(db: Database) -> List[str]:
     """Get available scenarios from database."""
     try:
         sql = "SELECT DISTINCT name FROM scenarios ORDER BY name"
@@ -223,7 +224,7 @@ def get_available_scenarios(db: Database) -> List[str]:
         return ["test-scenario-01", "test-scenario-02", "validation-suite"]
 
 
-def get_available_toolsets(db: Database, fab: str) -> List[str]:
+def fetch_available_toolsets(db: Database, fab: str) -> List[str]:
     """Get available toolsets for a specific fab."""
     try:
         sql = "SELECT DISTINCT toolset_id FROM toolsets WHERE fab = ? ORDER BY toolset_id"
@@ -257,20 +258,20 @@ def validate_approach_specific_args(approach: Approach, args) -> None:
             print(f"Warning: --coverage-target is ignored for SCENARIO approach (scenarios have predefined coverage)")
         
         # SCENARIO approach needs exactly one scenario identifier
-        scenario_args = [args.by_code, args.by_file]
+        scenario_args = [args.scenario_code, args.scenario_file]
         if not any(scenario_args):
-            raise ValueError("SCENARIO approach requires either --by-code or --by-file")
+            raise ValueError("SCENARIO approach requires either --scenario-code or --scenario-file")
         
         # Only one scenario identifier should be provided
         provided_args = [arg for arg in scenario_args if arg]
         if len(provided_args) > 1:
-            raise ValueError("SCENARIO approach: only one of --by-code or --by-file should be provided")
+            raise ValueError("SCENARIO approach: only one of --scenario-code or --scenario-file should be provided")
     
     elif approach == Approach.RANDOM:
         # RANDOM approach doesn't use scenario arguments
-        scenario_args = [args.by_code, args.by_file]
+        scenario_args = [args.scenario_code, args.scenario_file]
         if any(scenario_args):
-            print(f"Warning: scenario arguments (--by-code, --by-file) are ignored for RANDOM approach")
+            print(f"Warning: scenario arguments (--scenario-code, --scenario-file) are ignored for RANDOM approach")
 
 
 def validate_method_for_approach(approach: Approach, method: Optional[str]) -> Method:
@@ -414,7 +415,7 @@ def unattended_mode(args) -> None:
         
         # Validate approach-specific arguments (but suppress warnings in unattended mode)
         if approach == Approach.SCENARIO:
-            scenario_args = [args.by_code, args.by_file]
+            scenario_args = [args.scenario_code, args.scenario_file]
             if not any(scenario_args):
                 print("error")
                 sys.exit(1)
@@ -437,7 +438,7 @@ def unattended_mode(args) -> None:
             if not fab:
                 db = Database()
                 try:
-                    available_fabs = get_available_fabs(db)
+                    available_fabs = fetch_available_fabs(db)
                     if available_fabs:
                         fab = available_fabs[0]
                     else:
@@ -448,8 +449,8 @@ def unattended_mode(args) -> None:
                     db.close()
         
         elif approach == Approach.SCENARIO:
-            scenario_code = args.by_code or ""
-            scenario_file = args.by_file or ""
+            scenario_code = args.scenario_code or ""
+            scenario_file = args.scenario_file or ""
             
             # Auto-detect method from scenario code if provided
             if scenario_code:
@@ -508,7 +509,7 @@ def default_mode(args) -> None:
             if not fab:
                 db = Database()
                 try:
-                    available_fabs = get_available_fabs(db)
+                    available_fabs = fetch_available_fabs(db)
                     if available_fabs:
                         fab = available_fabs[0]
                         if args.verbose:
@@ -525,8 +526,8 @@ def default_mode(args) -> None:
                     db.close()
         
         elif approach == Approach.SCENARIO:
-            scenario_code = args.by_code or ""
-            scenario_file = args.by_file or ""
+            scenario_code = args.scenario_code or ""
+            scenario_file = args.scenario_file or ""
             
             # Auto-detect method from scenario code if provided
             if scenario_code:
@@ -594,7 +595,7 @@ def interactive_mode():
     
     try:
         # 1. Select approach
-        approach_str = get_user_choice(
+        approach_str = fetch_user_choice(
             "Select analysis approach:",
             ["RANDOM", "SCENARIO"],
             default_idx=0
@@ -610,7 +611,7 @@ def interactive_mode():
             method_help = "PREDEFINED: Use existing scenarios\nSYNTHETIC: Generate synthetic scenarios"
         
         print(f"\n{method_help}")
-        method_str = get_user_choice(
+        method_str = fetch_user_choice(
             f"Select method for {approach_str} approach:",
             method_choices,
             default_idx=0
@@ -620,7 +621,7 @@ def interactive_mode():
         # 3. Get coverage target (only for RANDOM approach)
         coverage_target = 0.0  # Default for SCENARIO
         if approach == Approach.RANDOM:
-            coverage_target = get_float_input(
+            coverage_target = fetch_float_input(
                 "\nEnter coverage target (as decimal, e.g., 0.2 for 20%)",
                 default=0.2,
                 min_val=0.01,
@@ -637,20 +638,20 @@ def interactive_mode():
         
         if approach == Approach.RANDOM:
             # RANDOM approach: get fab and toolset
-            available_fabs = get_available_fabs(db)
-            fab = get_string_input(
+            available_fabs = fetch_available_fabs(db)
+            fab = fetch_string_input(
                 "\nEnter fabrication identifier (fab)",
                 required=True,
                 available_options=available_fabs
             )
             
-            available_toolsets = get_available_toolsets(db, fab)
+            available_toolsets = fetch_available_toolsets(db, fab)
             print("\nToolset selection (optional):")
             print("  - Leave empty to use all toolsets")
             print("  - Enter 'ALL' to explicitly use all toolsets")
             print("  - Enter specific toolset ID to limit analysis")
             
-            toolset = get_string_input(
+            toolset = fetch_string_input(
                 "Enter toolset ID",
                 default="",
                 required=False,
@@ -665,14 +666,14 @@ def interactive_mode():
             print("    • SYNXXXXXXX for synthetic scenarios")
             print("  - Or provide a scenario file (e.g., scenarios.json)")
             
-            scenario_code = get_string_input(
+            scenario_code = fetch_string_input(
                 "\nEnter scenario code (e.g., PREXXXXXXX, SYNXXXXXXX)",
                 default="",
                 required=False
             )
             
             if not scenario_code:
-                scenario_file = get_string_input(
+                scenario_file = fetch_string_input(
                     "Enter scenario file path (optional)",
                     default="",
                     required=False
@@ -700,7 +701,7 @@ def interactive_mode():
         )
         
         # 6. Verbose option
-        verbose_choice = get_user_choice(
+        verbose_choice = fetch_user_choice(
             "\nEnable verbose output?",
             ["No", "Yes"],
             default_idx=0
@@ -710,7 +711,7 @@ def interactive_mode():
         # Show configuration and confirm
         print_configuration_summary(config, scenario_code, scenario_file)
         
-        confirm = get_user_choice(
+        confirm = fetch_user_choice(
             "\nProceed with this configuration?",
             ["Yes", "No"],
             default_idx=0
