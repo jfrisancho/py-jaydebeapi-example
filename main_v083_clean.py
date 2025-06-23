@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
 Main CLI application entry point for path analysis system.
-Final version with simplified fab-based implementation and updated phase handling.
+Cleaned version with improved reusability and proper phase handling.
 """
 
 import argparse
 import sys
 import uuid
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 from enums import Approach, Method, RunStatus, ExecutionMode, Phase
 from models import RunConfig, RunResult
@@ -127,6 +127,10 @@ Examples:
     return parser
 
 
+# =============================================================================
+# INPUT/OUTPUT UTILITIES
+# =============================================================================
+
 def fetch_user_choice(prompt: str, choices: List[str], default_idx: int = 0) -> str:
     """Get user choice from a list of options."""
     print(f"\n{prompt}")
@@ -202,6 +206,10 @@ def fetch_string_input(prompt: str, default: str = "", required: bool = False, a
             sys.exit(130)
 
 
+# =============================================================================
+# DATABASE UTILITIES
+# =============================================================================
+
 def fetch_available_fabs(db: Database) -> List[str]:
     """Get available fabs from database."""
     try:
@@ -255,13 +263,13 @@ def fetch_available_toolsets(db: Database, fab: str) -> List[str]:
 
 
 def fetch_available_phases(db: Database, fab: str) -> List[str]:
-    """Get available phases for a specific fab."""
+    """Get available phases for a specific fab (returns conceptual format for display)."""
     try:
         sql = "SELECT DISTINCT phase FROM tb_toolsets WHERE fab = ? AND is_active = TRUE ORDER BY phase"
         results = db.query(sql, [fab])
         phases = [row[0] for row in results] if results else []
         
-        # Convert system nomenclature (A, B, C, D) to human readable
+        # Convert system nomenclature (A, B, C, D) to human readable (conceptual format)
         human_readable_phases = []
         for phase in phases:
             phase_enum = Phase.normalize(phase)
@@ -276,6 +284,10 @@ def fetch_available_phases(db: Database, fab: str) -> List[str]:
     except Exception:
         return ["PHASE1", "PHASE2", "PHASE3", "PHASE4"]
 
+
+# =============================================================================
+# VALIDATION UTILITIES
+# =============================================================================
 
 def validate_approach_specific_args(approach: Approach, args) -> None:
     """Validate that approach-specific arguments are provided correctly."""
@@ -338,24 +350,8 @@ def detect_scenario_method_from_code(scenario_code: str) -> Method:
         return Method.PREDEFINED
 
 
-def validate_method(approach: Approach, method: str) -> Method:
-    """Validate and return the appropriate method for the given approach."""
-    if approach == Approach.RANDOM:
-        if method.upper() not in ['SIMPLE', 'STRATIFIED']:
-            raise ValueError(f"Invalid method '{method}' for RANDOM approach. Use SIMPLE or STRATIFIED.")
-        return Method(method.upper())
-    
-    elif approach == Approach.SCENARIO:
-        if method.upper() not in ['PREDEFINED', 'SYNTHETIC']:
-            raise ValueError(f"Invalid method '{method}' for SCENARIO approach. Use PREDEFINED or SYNTHETIC.")
-        return Method(method.upper())
-    
-    else:
-        raise ValueError(f"Unknown approach: {approach}")
-
-
-def normalize_phase(phase_str: str) -> str:
-    """Normalize phase string to system nomenclature (A, B, C, D)."""
+def normalize_phase_to_nominal(phase_str: str) -> str:
+    """Normalize phase string to system nomenclature (A, B, C, D) for SQL queries."""
     if not phase_str:
         return ""
     
@@ -363,8 +359,173 @@ def normalize_phase(phase_str: str) -> str:
     return phase_enum.nominal if phase_enum else phase_str  # Return system nomenclature (A, B, C, D)
 
 
+def normalize_phase_to_conceptual(phase_str: str) -> str:
+    """Normalize phase string to conceptual format (PHASE1, PHASE2, etc.) for display."""
+    if not phase_str:
+        return ""
+    
+    phase_enum = Phase.normalize(phase_str)
+    return phase_enum.conceptual if phase_enum else phase_str  # Return conceptual format
+
+
+# =============================================================================
+# CONFIGURATION UTILITIES
+# =============================================================================
+
+def create_run_config_from_params(
+    approach: Approach,
+    method: Method,
+    coverage_target: float,
+    building_code: str = "",
+    toolset: str = "",
+    phase: str = "",
+    scenario_code: str = "",
+    scenario_file: str = "",
+    execution_mode: ExecutionMode = ExecutionMode.DEFAULT,
+    verbose_mode: bool = False
+) -> RunConfig:
+    """Create a RunConfig from parameters."""
+    return RunConfig.create_with_auto_tag(
+        run_id=str(uuid.uuid4()),
+        approach=approach,
+        method=method,
+        coverage_target=coverage_target,
+        building_code=building_code,
+        toolset=toolset,
+        phase=phase,  # Should be in nominal format (A, B, C, D)
+        scenario_code=scenario_code,
+        scenario_file=scenario_file,
+        execution_mode=execution_mode,
+        verbose_mode=verbose_mode,
+        started_at=datetime.now()
+    )
+
+
+def resolve_building_code(provided_building_code: str, verbose: bool = False) -> str:
+    """Resolve building code, getting default if not provided."""
+    if provided_building_code:
+        return provided_building_code
+    
+    # Get default fab if not provided
+    db = Database()
+    try:
+        available_fabs = fetch_available_fabs(db)
+        if available_fabs:
+            building_code = available_fabs[0]
+            if verbose:
+                print(f"No fab specified, using default: {building_code}")
+        else:
+            building_code = "M16"
+            if verbose:
+                print(f"No fabs found in database, using: {building_code}")
+        return building_code
+    except Exception:
+        building_code = "M16"
+        if verbose:
+            print(f"Could not retrieve fabs from database, using: {building_code}")
+        return building_code
+    finally:
+        db.close()
+
+
+def collect_random_config_params(args, interactive: bool = False) -> Tuple[str, str, str]:
+    """Collect configuration parameters for RANDOM approach."""
+    building_code = args.fab or "" if not interactive else ""
+    toolset = args.toolset or "" if not interactive else ""
+    phase = normalize_phase_to_nominal(args.phase or "") if not interactive else ""
+    
+    if interactive:
+        db = Database()
+        try:
+            # Get fab
+            available_fabs = fetch_available_fabs(db)
+            building_code = fetch_string_input(
+                "\nEnter fab identifier",
+                required=True,
+                available_options=available_fabs
+            )
+            
+            # Get phase
+            available_phases = fetch_available_phases(db, building_code)
+            if len(available_phases) > 1:
+                phase_choice = fetch_string_input(
+                    "\nEnter phase (optional)",
+                    default="",
+                    required=False,
+                    available_options=available_phases
+                )
+                phase = normalize_phase_to_nominal(phase_choice)  # Convert to nominal format for storage
+            
+            # Get toolset
+            available_toolsets = fetch_available_toolsets(db, building_code)
+            print("\nToolset selection (optional):")
+            print("  - Leave empty to use all toolsets")
+            print("  - Enter 'ALL' to explicitly use all toolsets")
+            print("  - Enter specific toolset ID to limit analysis")
+            
+            toolset = fetch_string_input(
+                "Enter toolset ID",
+                default="",
+                required=False,
+                available_options=available_toolsets
+            )
+        finally:
+            db.close()
+    
+    return building_code, toolset, phase
+
+
+def collect_scenario_config_params(args, interactive: bool = False) -> Tuple[str, str, Method]:
+    """Collect configuration parameters for SCENARIO approach."""
+    scenario_code = args.scenario_code or "" if not interactive else ""
+    scenario_file = args.scenario_file or "" if not interactive else ""
+    method = Method.PREDEFINED  # Default
+    
+    if interactive:
+        db = Database()
+        try:
+            print("\nScenario configuration:")
+            print("  - Specify a scenario code:")
+            print("    • PRE### for predefined scenarios")
+            print("    • SYN### for synthetic scenarios")
+            print("  - Or provide a scenario file (e.g., scenarios.json)")
+            
+            available_scenarios = fetch_available_scenarios(db)
+            scenario_code = fetch_string_input(
+                "\nEnter scenario code (e.g., PRE001, SYN001)",
+                default="",
+                required=False,
+                available_options=available_scenarios
+            )
+            
+            if not scenario_code:
+                scenario_file = fetch_string_input(
+                    "Enter scenario file path (optional)",
+                    default="",
+                    required=False
+                )
+            
+            # Ensure at least one scenario parameter is provided
+            if not any([scenario_code, scenario_file]):
+                raise ValueError("At least one scenario parameter is required for SCENARIO approach.")
+        finally:
+            db.close()
+    
+    # Auto-detect method from scenario code if provided
+    if scenario_code:
+        method = detect_scenario_method_from_code(scenario_code)
+        if interactive:
+            print(f"Auto-detected scenario type: {method.value}")
+    
+    return scenario_code, scenario_file, method
+
+
+# =============================================================================
+# DISPLAY UTILITIES
+# =============================================================================
+
 def print_configuration_summary(config: RunConfig):
-    """Print configuration summary."""
+    """Print configuration summary using conceptual format for phases."""
     print(f"\n{'='*60}")
     print(f"CONFIGURATION SUMMARY")
     print(f"{'='*60}")
@@ -376,9 +537,8 @@ def print_configuration_summary(config: RunConfig):
         print(f"Coverage Target: {config.coverage_target:.1%}")
         print(f"Fab: {config.building_code}")
         if config.phase:
-            # Convert system nomenclature back to human readable for display
-            phase_enum = Phase.normalize(config.phase)
-            display_phase = phase_enum.conceptual if phase_enum else config.phase
+            # Convert nominal format (A, B, C, D) to conceptual format for display
+            display_phase = normalize_phase_to_conceptual(config.phase)
             print(f"Phase: {display_phase} ({config.phase})")
         if config.toolset:
             print(f"Toolset: {config.toolset}")
@@ -397,7 +557,7 @@ def print_configuration_summary(config: RunConfig):
 
 
 def print_run_summary(result: RunResult, verbose: bool = False):
-    """Print run summary to console."""
+    """Print run summary to console using conceptual format for phases."""
     print(f"\n{'='*60}")
     print(f"RUN SUMMARY")
     print(f"{'='*60}")
@@ -446,6 +606,10 @@ def print_run_summary(result: RunResult, verbose: bool = False):
             print(f"  ... and {len(result.critical_errors) - 5} more critical errors")
 
 
+# =============================================================================
+# EXECUTION UTILITIES
+# =============================================================================
+
 def execute_run_with_config(config: RunConfig, verbose: bool = False) -> RunResult:
     """Execute a run with the given configuration."""
     # Initialize database and services
@@ -467,10 +631,14 @@ def execute_run_with_config(config: RunConfig, verbose: bool = False) -> RunResu
         db.close()
 
 
+# =============================================================================
+# MODE IMPLEMENTATIONS
+# =============================================================================
+
 def unattended_mode(args) -> None:
     """Run the application in unattended mode (silent, for scripts/automation)."""
     try:
-        # Use the same configuration logic as default mode
+        # Parse approach and method
         approach = Approach(args.approach)
         method = validate_method_for_approach(approach, args.method)
         
@@ -485,44 +653,18 @@ def unattended_mode(args) -> None:
                 print("error")
                 sys.exit(1)
         
-        # Handle approach-specific configuration
-        building_code = ""
-        toolset = ""
-        phase = ""
-        scenario_code = ""
-        scenario_file = ""
-        
+        # Collect configuration parameters
         if approach == Approach.RANDOM:
-            building_code = args.fab or ""
-            toolset = args.toolset or ""
-            phase = normalize_phase(args.phase or "")
-            
-            # Get default fab if not provided (silently)
-            if not building_code:
-                db = Database()
-                try:
-                    available_fabs = fetch_available_fabs(db)
-                    if available_fabs:
-                        building_code = available_fabs[0]
-                    else:
-                        building_code = "M16"  # Default fallback
-                except Exception:
-                    building_code = "M16"
-                finally:
-                    db.close()
-        
-        elif approach == Approach.SCENARIO:
-            scenario_code = args.scenario_code or ""
-            scenario_file = args.scenario_file or ""
-            
-            # Auto-detect method from scenario code if provided
-            if scenario_code:
-                method = detect_scenario_method_from_code(scenario_code)
+            building_code, toolset, phase = collect_random_config_params(args, interactive=False)
+            building_code = resolve_building_code(building_code, verbose=False)
+            scenario_code, scenario_file = "", ""
+        else:
+            scenario_code, scenario_file, method = collect_scenario_config_params(args, interactive=False)
+            building_code, toolset, phase = "", "", ""
         
         # Generate configuration
         coverage_target = args.coverage_target if approach == Approach.RANDOM else 0.0
-        config = RunConfig.create_with_auto_tag(
-            run_id=str(uuid.uuid4()),
+        config = create_run_config_from_params(
             approach=approach,
             method=method,
             coverage_target=coverage_target,
@@ -532,8 +674,7 @@ def unattended_mode(args) -> None:
             scenario_code=scenario_code,
             scenario_file=scenario_file,
             execution_mode=ExecutionMode.UNATTENDED,
-            verbose_mode=False,
-            started_at=datetime.now()
+            verbose_mode=False
         )
         
         # Execute the run (always silent and non-verbose in unattended mode)
@@ -556,57 +697,25 @@ def unattended_mode(args) -> None:
 def default_mode(args) -> None:
     """Run the application in default mode (quick test with optional parameters)."""
     try:
-        # Configuration logic
+        # Parse approach and method
         approach = Approach(args.approach)
         method = validate_method_for_approach(approach, args.method)
         
         # Validate approach-specific arguments
         validate_approach_specific_args(approach, args)
         
-        # Handle approach-specific configuration
-        building_code = ""
-        toolset = ""
-        phase = ""
-        scenario_code = ""
-        scenario_file = ""
-        
+        # Collect configuration parameters
         if approach == Approach.RANDOM:
-            building_code = args.fab or ""
-            toolset = args.toolset or ""
-            phase = normalize_phase(args.phase or "")
-            
-            # Get default fab if not provided
-            if not building_code:
-                db = Database()
-                try:
-                    available_fabs = fetch_available_fabs(db)
-                    if available_fabs:
-                        building_code = available_fabs[0]
-                        if args.verbose:
-                            print(f"No fab specified, using default: {building_code}")
-                    else:
-                        building_code = "M16"
-                        if args.verbose:
-                            print(f"No fabs found in database, using: {building_code}")
-                except Exception as e:
-                    building_code = "M16"
-                    if args.verbose:
-                        print(f"Could not retrieve fabs from database, using: {building_code}")
-                finally:
-                    db.close()
-        
-        elif approach == Approach.SCENARIO:
-            scenario_code = args.scenario_code or ""
-            scenario_file = args.scenario_file or ""
-            
-            # Auto-detect method from scenario code if provided
-            if scenario_code:
-                method = detect_scenario_method_from_code(scenario_code)
+            building_code, toolset, phase = collect_random_config_params(args, interactive=False)
+            building_code = resolve_building_code(building_code, verbose=args.verbose)
+            scenario_code, scenario_file = "", ""
+        else:
+            scenario_code, scenario_file, method = collect_scenario_config_params(args, interactive=False)
+            building_code, toolset, phase = "", "", ""
         
         # Generate configuration
         coverage_target = args.coverage_target if approach == Approach.RANDOM else 0.0
-        config = RunConfig.create_with_auto_tag(
-            run_id=str(uuid.uuid4()),
+        config = create_run_config_from_params(
             approach=approach,
             method=method,
             coverage_target=coverage_target,
@@ -616,8 +725,7 @@ def default_mode(args) -> None:
             scenario_code=scenario_code,
             scenario_file=scenario_file,
             execution_mode=ExecutionMode.DEFAULT,
-            verbose_mode=args.verbose,
-            started_at=datetime.now()
+            verbose_mode=args.verbose
         )
         
         # Output based on verbosity
@@ -665,9 +773,6 @@ def interactive_mode():
     print("=" * 60)
     print("Welcome! This tool will guide you through setting up a path analysis run.")
     
-    # Initialize database connection for options lookup
-    db = Database()
-    
     try:
         # 1. Select approach
         approach_str = fetch_user_choice(
@@ -691,7 +796,12 @@ def interactive_mode():
             method_choices,
             default_idx=0
         )
-        method = validate_method(approach, method_str)
+        
+        # Note: For scenarios, method will be auto-detected from code
+        if approach == Approach.RANDOM:
+            method = Method(method_str.upper())
+        else:
+            method = Method.PREDEFINED  # Will be overridden if scenario code provided
         
         # 3. Get coverage target (only for RANDOM approach)
         coverage_target = 0.0  # Default for SCENARIO
@@ -705,81 +815,16 @@ def interactive_mode():
         else:
             print("\nSCENARIO approach uses predefined coverage from scenarios - no target needed.")
         
-        # 4. Approach-specific configuration
-        building_code = ""
-        toolset = ""
-        phase = ""
-        scenario_code = ""
-        scenario_file = ""
-        
+        # 4. Collect approach-specific configuration
         if approach == Approach.RANDOM:
-            # RANDOM approach: get fab, phase, and toolset
-            available_fabs = fetch_available_fabs(db)
-            building_code = fetch_string_input(
-                "\nEnter fab identifier",
-                required=True,
-                available_options=available_fabs
-            )
-            
-            available_phases = fetch_available_phases(db, building_code)
-            if len(available_phases) > 1:
-                phase_choice = fetch_string_input(
-                    "\nEnter phase (optional)",
-                    default="",
-                    required=False,
-                    available_options=available_phases
-                )
-                phase = normalize_phase(phase_choice)  # Convert to system nomenclature
-            
-            available_toolsets = fetch_available_toolsets(db, building_code)
-            print("\nToolset selection (optional):")
-            print("  - Leave empty to use all toolsets")
-            print("  - Enter 'ALL' to explicitly use all toolsets")
-            print("  - Enter specific toolset ID to limit analysis")
-            
-            toolset = fetch_string_input(
-                "Enter toolset ID",
-                default="",
-                required=False,
-                available_options=available_toolsets
-            )
-            
-        elif approach == Approach.SCENARIO:
-            # SCENARIO approach: get scenario configuration
-            print("\nScenario configuration:")
-            print("  - Specify a scenario code:")
-            print("    • PRE### for predefined scenarios")
-            print("    • SYN### for synthetic scenarios")
-            print("  - Or provide a scenario file (e.g., scenarios.json)")
-            
-            available_scenarios = fetch_available_scenarios(db)
-            scenario_code = fetch_string_input(
-                "\nEnter scenario code (e.g., PRE001, SYN001)",
-                default="",
-                required=False,
-                available_options=available_scenarios
-            )
-            
-            if not scenario_code:
-                scenario_file = fetch_string_input(
-                    "Enter scenario file path (optional)",
-                    default="",
-                    required=False
-                )
-            
-            # Ensure at least one scenario parameter is provided
-            if not any([scenario_code, scenario_file]):
-                print("At least one scenario parameter is required for SCENARIO approach.")
-                return
-            
-            # Auto-detect method from scenario code if provided
-            if scenario_code:
-                method = detect_scenario_method_from_code(scenario_code)
-                print(f"Auto-detected scenario type: {method.value}")
+            building_code, toolset, phase = collect_random_config_params(None, interactive=True)
+            scenario_code, scenario_file = "", ""
+        else:
+            scenario_code, scenario_file, method = collect_scenario_config_params(None, interactive=True)
+            building_code, toolset, phase = "", "", ""
         
-        # 5. Generate tag and create configuration
-        config = RunConfig.create_with_auto_tag(
-            run_id=str(uuid.uuid4()),
+        # 5. Create configuration
+        config = create_run_config_from_params(
             approach=approach,
             method=method,
             coverage_target=coverage_target,
@@ -789,8 +834,7 @@ def interactive_mode():
             scenario_code=scenario_code,
             scenario_file=scenario_file,
             execution_mode=ExecutionMode.INTERACTIVE,
-            verbose_mode=False,  # Will be set below
-            started_at=datetime.now()
+            verbose_mode=False  # Will be set below
         )
         
         # 6. Verbose option
@@ -836,9 +880,11 @@ def interactive_mode():
     except Exception as e:
         print(f"\nError: {e}", file=sys.stderr)
         sys.exit(1)
-    finally:
-        db.close()
 
+
+# =============================================================================
+# MAIN ENTRY POINT
+# =============================================================================
 
 def main():
     """Main CLI entry point."""

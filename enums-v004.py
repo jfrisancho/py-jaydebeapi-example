@@ -137,156 +137,157 @@ class SyncStatus(Enum):
 
 class Approach(Enum):
     """Analysis approach types."""
-    RANDOM = "RANDOM"
-    SCENARIO = "SCENARIO"
+    RANDOM = 'RANDOM'
+    SCENARIO = 'SCENARIO'
 
 
 class Method(Enum):
     """Analysis method types."""
     # For RANDOM approach
-    SIMPLE = "SIMPLE"
-    STRATIFIED = "STRATIFIED"
+    SIMPLE = 'SIMPLE'
+    STRATIFIED = 'STRATIFIED'
     
     # For SCENARIO approach
-    PREDEFINED = "PREDEFINED"
-    SYNTHETIC = "SYNTHETIC"
+    PREDEFINED = 'PREDEFINED'
+    SYNTHETIC = 'SYNTHETIC'
+    FILE = 'FILE'
 
 
 class RunStatus(Enum):
     """Run execution status."""
-    RUNNING = "RUNNING"
-    DONE = "DONE"
-    FAILED = "FAILED"
+    RUNNING = 'RUNNING'
+    DONE = 'DONE'
+    FAILED = 'FAILED'
 
 
 class ObjectType(Enum):
     """Database object types."""
-    NODE = "NODE"
-    LINK = "LINK"
-    EQUIPMENT = "EQUIPMENT"
-    POC = "POC"
-    PATH = "PATH"
-    SCENARIO = "SCENARIO"
+    NODE = 'NODE'
+    LINK = 'LINK'
+    EQUIPMENT = 'EQUIPMENT'
+    POC = 'POC'
+    PATH = 'PATH'
+    SCENARIO = 'SCENARIO'
 
 
 class Severity(Enum):
     """Error/issue severity levels."""
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH = "HIGH"
-    CRITICAL = "CRITICAL"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
+    LOW = 'LOW'
+    MEDIUM = 'MEDIUM'
+    HIGH = 'HIGH'
+    CRITICAL = 'CRITICAL'
+    WARNING = 'WARNING'
+    ERROR = 'ERROR'
 
 
 class TagType(Enum):
     """Path tag classification types."""
-    QA = "QA"           # Quality assurance
-    RISK = "RISK"       # Risk assessment
-    INS = "INS"         # Inspection
-    CRIT = "CRIT"       # Criticality
-    UTY = "UTY"         # Utility
-    CAT = "CAT"         # Category
-    DAT = "DAT"         # Data
-    FAB = "FAB"         # Fabrication
-    EQUIPMENT = "EQUIPMENT"  # Equipment-related
-    POC = "POC"         # Point of Contact
-    SCENARIO = "SCENARIO"    # Scenario-related
+    QA = 'QA'           # Quality assurance
+    RISK = 'RISK'       # Risk assessment
+    INS = 'INS'         # Inspection
+    CRIT = 'CRIT'       # Criticality
+    UTY = 'UTY'         # Utility
+    CAT = 'CAT'         # Category
+    DAT = 'DAT'         # Data
+    FAB = 'FAB'         # Fabrication
+    EQUIPMENT = 'EQUIPMENT'  # Equipment-related
+    POC = 'POC'         # Point of Contact
+    SCENARIO = 'SCENARIO'    # Scenario-related
 
 
 class ValidationScope(Enum):
     """Validation test scopes."""
-    FLOW = "FLOW"
-    CONNECTIVITY = "CONNECTIVITY"
-    MATERIAL = "MATERIAL"
-    QA = "QA"
-    EQUIPMENT = "EQUIPMENT"
-    POC = "POC"
-    UTILITY = "UTILITY"
-    SCENARIO = "SCENARIO"
+    FLOW = 'FLOW'
+    CONNECTIVITY = 'CONNECTIVITY'
+    MATERIAL = 'MATERIAL'
+    QA = 'QA'
+    EQUIPMENT = 'EQUIPMENT'
+    POC = 'POC'
+    UTILITY = 'UTILITY'
+    SCENARIO = 'SCENARIO'
 
 
 class ErrorType(Enum):
     """Validation error types."""
-    MISSING_FLOW = "MISSING_FLOW"
-    WRONG_DIRECTION = "WRONG_DIRECTION"
-    MISSING_NODE = "MISSING_NODE"
-    MISSING_LINK = "MISSING_LINK"
-    INVALID_MATERIAL = "INVALID_MATERIAL"
-    CONNECTIVITY_BREAK = "CONNECTIVITY_BREAK"
-    PATH_NOT_FOUND = "PATH_NOT_FOUND"
-    UTILITY_MISMATCH = "UTILITY_MISMATCH"
-    EQUIPMENT_ERROR = "EQUIPMENT_ERROR"
-    POC_ERROR = "POC_ERROR"
-    MISSING_UTILITY = "MISSING_UTILITY"
-    INVALID_POC = "INVALID_POC"
-    ORPHANED_NODE = "ORPHANED_NODE"
-    SCENARIO_ERROR = "SCENARIO_ERROR"
+    MISSING_FLOW = 'MISSING_FLOW'
+    WRONG_DIRECTION = 'WRONG_DIRECTION'
+    MISSING_NODE = 'MISSING_NODE'
+    MISSING_LINK = 'MISSING_LINK'
+    INVALID_MATERIAL = 'INVALID_MATERIAL'
+    CONNECTIVITY_BREAK = 'CONNECTIVITY_BREAK'
+    PATH_NOT_FOUND = 'PATH_NOT_FOUND'
+    UTILITY_MISMATCH = 'UTILITY_MISMATCH'
+    EQUIPMENT_ERROR = 'EQUIPMENT_ERROR'
+    POC_ERROR = 'POC_ERROR'
+    MISSING_UTILITY = 'MISSING_UTILITY'
+    INVALID_POC = 'INVALID_POC'
+    ORPHANED_NODE = 'ORPHANED_NODE'
+    SCENARIO_ERROR = 'SCENARIO_ERROR'
 
 
 class SelectionStrategy(Enum):
     """Equipment selection strategies for bias mitigation"""
-    PURE_RANDOM = "PURE_RANDOM"
-    WEIGHTED_RANDOM = "WEIGHTED_RANDOM"
-    UTILITY_BALANCED = "UTILITY_BALANCED"
-    COVERAGE_OPTIMIZED = "COVERAGE_OPTIMIZED"
-    ERROR_FOCUSED = "ERROR_FOCUSED"
+    PURE_RANDOM = 'PURE_RANDOM'
+    WEIGHTED_RANDOM = 'WEIGHTED_RANDOM'
+    UTILITY_BALANCED = 'UTILITY_BALANCED'
+    COVERAGE_OPTIMIZED = 'COVERAGE_OPTIMIZED'
+    ERROR_FOCUSED = 'ERROR_FOCUSED'
 
 
 class ExecutionMode(Enum):
     """CLI execution modes"""
-    DEFAULT = "DEFAULT"
-    INTERACTIVE = "INTERACTIVE"
-    UNATTENDED = "UNATTENDED"
+    DEFAULT = 'DEFAULT'
+    INTERACTIVE = 'INTERACTIVE'
+    UNATTENDED = 'UNATTENDED'
 
 
 class ScenarioType(Enum):
     """Scenario types"""
-    PREDEFINED = "PREDEFINED"
-    SYNTHETIC = "SYNTHETIC"
+    PREDEFINED = 'PREDEFINED'
+    SYNTHETIC = 'SYNTHETIC'
 
 
 class SourceType(Enum):
     """Path source types"""
-    RANDOM = "RANDOM"
-    SCENARIO = "SCENARIO"
+    RANDOM = 'RANDOM'
+    SCENARIO = 'SCENARIO'
 
 
 class FlagType(Enum):
     """Review flag types"""
-    MANUAL_REVIEW = "MANUAL_REVIEW"
-    CRITICAL_ERROR = "CRITICAL_ERROR"
-    PERFORMANCE = "PERFORMANCE"
-    ANOMALY = "ANOMALY"
+    MANUAL_REVIEW = 'MANUAL_REVIEW'
+    CRITICAL_ERROR = 'CRITICAL_ERROR'
+    PERFORMANCE = 'PERFORMANCE'
+    ANOMALY = 'ANOMALY'
 
 
 class FlagStatus(Enum):
     """Review flag status"""
-    OPEN = "OPEN"
-    ACKNOWLEDGED = "ACKNOWLEDGED"
-    RESOLVED = "RESOLVED"
-    DISMISSED = "DISMISSED"
+    OPEN = 'OPEN'
+    ACKNOWLEDGED = 'ACKNOWLEDGED'
+    RESOLVED = 'RESOLVED'
+    DISMISSED = 'DISMISSED'
 
 
 class CompletionStatus(Enum):
     """Run completion status"""
-    COMPLETED = "COMPLETED"
-    PARTIAL = "PARTIAL"
-    FAILED = "FAILED"
+    COMPLETED = 'COMPLETED'
+    PARTIAL = 'PARTIAL'
+    FAILED = 'FAILED'
 
 
 class ConfigCategory(Enum):
     """System configuration categories"""
-    DATABASE = "DATABASE"
-    EXECUTION = "EXECUTION"
-    VALIDATION = "VALIDATION"
-    UI = "UI"
+    DATABASE = 'DATABASE'
+    EXECUTION = 'EXECUTION'
+    VALIDATION = 'VALIDATION'
+    UI = 'UI'
 
 
 class ConfigType(Enum):
     """System configuration value types"""
-    STRING = "STRING"
-    INTEGER = "INTEGER"
-    FLOAT = "FLOAT"
-    BOOLEAN = "BOOLEAN"
-    JSON = "JSON"
+    STRING = 'STRING'
+    INTEGER = 'INTEGER'
+    FLOAT = 'FLOAT'
+    BOOLEAN = 'BOOLEAN'
+    JSON = 'JSON'
