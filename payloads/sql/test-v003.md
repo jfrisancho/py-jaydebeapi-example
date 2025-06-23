@@ -42,8 +42,8 @@ CREATE TABLE tb_equipment_pocs (
     code VARCHAR(8) NOT NULL,           -- POC01, POC02, IN01, OUT01
     node_id INTEGER NOT NULL,           -- Actual network node ID
     
-    utility VARCHAR(32),           -- N2, CDA, PW, etc. - NULL if unused
-    flow VARCHAR(8),          -- IN, OUT - NULL if unused
+    utility VARCHAR(32),        -- N2, CDA, PW, etc. - NULL if unused
+    flow VARCHAR(8),            -- IN, OUT - NULL if unused
     is_used BOOLEAN DEFAULT FALSE,
     
     is_active BOOLEAN DEFAULT TRUE,
