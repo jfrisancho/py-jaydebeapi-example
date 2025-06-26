@@ -13,8 +13,6 @@ import os
 import argparse
 from typing import List, Tuple, Optional, Dict
 
-# Add parent directory to path to import db module
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from db import Database
 
@@ -408,132 +406,6 @@ def insert_pocs_batch(db: Database, poc_data: List[Tuple], batch_size: int = 100
     return total_inserted
 
 
-def main():
-    """
-    Main function to orchestrate the equipment POC loading process.
-    """
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(
-        description="Load equipment POC data into tb_equipment_pocs table",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python load_equipment_pocs.py     # Interactive mode with confirmation
-  python load_equipment_pocs.py -y  # Unattended mode, auto-confirm
-        """
-    )
-    parser.add_argument(
-        '-y', '--yes', 
-        action='store_true',
-        help='Auto-confirm without prompting (unattended mode)'
-    )
-    
-    args = parser.parse_args()
-    
-    print("Starting equipment POC loading process...")
-    
-    db = None
-    try:
-        # Initialize database connection
-        print("Connecting to database...")
-        db = Database()
-        print("✓ Database connection established")
-        
-        # Load equipment mappings first
-        print("\nLoading equipment mappings...")
-        equipment_mapping = get_equipment_mapping(db)
-        
-        if not equipment_mapping:
-            print("✗ No active equipments found. Please load equipments first.")
-            return
-        
-        # Fetch source data
-        print("\nFetching equipment POC source data...")
-        raw_data = get_source_data(db)
-        
-        if not raw_data:
-            print("No source data found. Exiting.")
-            return
-        
-        # Transform data
-        print("\nTransforming data...")
-        transformed_data = transform_poc_data(raw_data, equipment_mapping)
-        
-        # Validate data
-        print("\nValidating data...")
-        valid_data = validate_poc_data(transformed_data)
-        print(f"✓ Validated {len(valid_data)} equipment POC records")
-        
-        if not valid_data:
-            print("No valid data to process. Exiting.")
-            return
-        
-        # Show summary
-        print(f"\nSummary of data to be loaded:")
-        print(f"  Total equipment POCs: {len(valid_data)}")
-        
-        # Analyze the data
-        used_count = sum(1 for _, _, _, _, is_used, _, _ in valid_data if is_used)
-        unused_count = len(valid_data) - used_count
-        
-        code_counts = {}
-        utility_counts = {}
-        flow_counts = {}
-        
-        for _, _, code, _, is_used, utility, flow in valid_data:
-            # Count POC codes
-            code_prefix = code[:3] if len(code) >= 3 else code
-            code_counts[code_prefix] = code_counts.get(code_prefix, 0) + 1
-            
-            # Count utilities (only for used POCs)
-            if is_used and utility:
-                utility_counts[utility] = utility_counts.get(utility, 0) + 1
-            
-            # Count flow directions
-            if flow:
-                flow_counts[flow] = flow_counts.get(flow, 0) + 1
-        
-        print(f"  Used POCs: {used_count}")
-        print(f"  Unused POCs: {unused_count}")
-        print(f"  Unique equipments with POCs: {len(set(eq_id for eq_id, _, _, _, _, _, _ in valid_data))}")
-        
-        # Show code distribution
-        print("  POC code distribution:")
-        for code_type, count in sorted(code_counts.items()):
-            print(f"    {code_type}**: {count}")
-        
-        # Show top utilities
-        if utility_counts:
-            top_utilities = sorted(utility_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-            print("  Top utilities:")
-            for utility, count in top_utilities:
-                print(f"    {utility}: {count}")
-        
-        # Show flow distribution
-        if flow_counts:
-            print("  Flow distribution:")
-            for flow, count in sorted(flow_counts.items()):
-                print(f"    {flow}: {count}")
-        
-        # Confirm before proceeding (unless -y flag is used)
-        if args.yes:
-            print("\nAuto-confirming due to -y flag...")
-        else:
-            response = input("\nProceed with loading? (y/N): ").strip().lower()
-            if response not in ['y', 'yes']:
-                print("Loading cancelled by user.")
-                return
-        
-        # Clear existing data
-        print("\nClearing existing equipment POCs...")
-        clear_existing_pocs(db)
-        
-        # Insert new data in batches
-        print("\nInserting equipment POCs...")
-        inserted_count = insert_pocs_batch(db, valid_data)
-        
-        print(f"\n✓ Successfully loaded {inserted_count} equipment POCs")
-        
 def load_verification(db: Database) -> bool:
     """
     Comprehensive verification of the loaded equipment POC data.
@@ -738,6 +610,136 @@ def load_verification(db: Database) -> bool:
     print(f"{'='*60}")
     
     return verification_passed
+
+
+def main():
+    """
+    Main function to orchestrate the equipment POC loading process.
+    """
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description="Load equipment POC data into tb_equipment_pocs table",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python load_equipment_pocs.py     # Interactive mode with confirmation
+  python load_equipment_pocs.py -y  # Unattended mode, auto-confirm
+        """
+    )
+    parser.add_argument(
+        '-y', '--yes', 
+        action='store_true',
+        help='Auto-confirm without prompting (unattended mode)'
+    )
+    
+    args = parser.parse_args()
+    
+    print("Starting equipment POC loading process...")
+    
+    db = None
+    try:
+        # Initialize database connection
+        print("Connecting to database...")
+        db = Database()
+        print("✓ Database connection established")
+        
+        # Load equipment mappings first
+        print("\nLoading equipment mappings...")
+        equipment_mapping = get_equipment_mapping(db)
+        
+        if not equipment_mapping:
+            print("✗ No active equipments found. Please load equipments first.")
+            return
+        
+        # Fetch source data
+        print("\nFetching equipment POC source data...")
+        raw_data = get_source_data(db)
+        
+        if not raw_data:
+            print("No source data found. Exiting.")
+            return
+        
+        # Transform data
+        print("\nTransforming data...")
+        transformed_data = transform_poc_data(raw_data, equipment_mapping)
+        
+        # Validate data
+        print("\nValidating data...")
+        valid_data = validate_poc_data(transformed_data)
+        print(f"✓ Validated {len(valid_data)} equipment POC records")
+        
+        if not valid_data:
+            print("No valid data to process. Exiting.")
+            return
+        
+        # Show summary
+        print(f"\nSummary of data to be loaded:")
+        print(f"  Total equipment POCs: {len(valid_data)}")
+        
+        # Analyze the data
+        used_count = sum(1 for _, _, _, _, is_used, _, _ in valid_data if is_used)
+        unused_count = len(valid_data) - used_count
+        
+        code_counts = {}
+        utility_counts = {}
+        flow_counts = {}
+        
+        for _, _, code, _, is_used, utility, flow in valid_data:
+            # Count POC codes
+            code_prefix = code[:3] if len(code) >= 3 else code
+            code_counts[code_prefix] = code_counts.get(code_prefix, 0) + 1
+            
+            # Count utilities (only for used POCs)
+            if is_used and utility:
+                utility_counts[utility] = utility_counts.get(utility, 0) + 1
+            
+            # Count flow directions
+            if flow:
+                flow_counts[flow] = flow_counts.get(flow, 0) + 1
+        
+        print(f"  Used POCs: {used_count}")
+        print(f"  Unused POCs: {unused_count}")
+        print(f"  Unique equipments with POCs: {len(set(eq_id for eq_id, _, _, _, _, _, _ in valid_data))}")
+        
+        # Show code distribution
+        print("  POC code distribution:")
+        for code_type, count in sorted(code_counts.items()):
+            print(f"    {code_type}**: {count}")
+        
+        # Show top utilities
+        if utility_counts:
+            top_utilities = sorted(utility_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+            print("  Top utilities:")
+            for utility, count in top_utilities:
+                print(f"    {utility}: {count}")
+        
+        # Show flow distribution
+        if flow_counts:
+            print("  Flow distribution:")
+            for flow, count in sorted(flow_counts.items()):
+                print(f"    {flow}: {count}")
+        
+        # Confirm before proceeding (unless -y flag is used)
+        if args.yes:
+            print("\nAuto-confirming due to -y flag...")
+        else:
+            response = input("\nProceed with loading? (y/N): ").strip().lower()
+            if response not in ['y', 'yes']:
+                print("Loading cancelled by user.")
+                return
+        
+        # Clear existing data
+        print("\nClearing existing equipment POCs...")
+        clear_existing_pocs(db)
+        
+        # Insert new data in batches
+        print("\nInserting equipment POCs...")
+        inserted_count = insert_pocs_batch(db, valid_data)
+        
+        print(f"\n✓ Successfully loaded {inserted_count} equipment POCs")
+        
+        load_verification(db);
+    
         
     except Exception as e:
         print(f"✗ Error during equipment POC loading: {e}")
