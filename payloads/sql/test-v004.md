@@ -5,65 +5,56 @@
 -- Toolsets: Simple with unique code, phase stored as A/B/C/D
 CREATE TABLE tb_toolsets (
     code VARCHAR(64) PRIMARY KEY,       -- Unique toolset code
-
-    model_no INTEGER NOT NULL,         -- Respresents the data model type (BIM, 5D)
     fab VARCHAR(10) NOT NULL,
-    phase_no INTEGER NOT NULL,         -- Store as A, B, C, D (system nomenclature)
-
-
+    phase VARCHAR(8) NOT NULL,          -- Store as A, B, C, D (system nomenclature)
     name VARCHAR(128),                  -- Optional name
     description VARCHAR(512),           -- Optional description
-    is_active BIT(1) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    INDEX idx_toolsets_fab (fab),
+    INDEX idx_toolsets_phase (phase),
+    INDEX idx_toolsets_fab_phase (fab, phase)
 );
-
-CREATE INDEX idx_toolsets_model_no ON tb_toolsets (model_no);
-CREATE INDEX idx_toolsets_fab ON tb_toolsets (fab);
-CREATE INDEX idx_toolsets_phase_no ON tb_toolsets (phase_no);
-CREATE INDEX idx_toolsets_fab_phase_no ON tb_toolsets (fab, phase_no);
-CREATE INDEX idx_toolsets_model_no_fab_phase_no ON tb_toolsets (model_no, fab, phase_no);
 
 -- Equipment: Simple FK to toolset code
 CREATE TABLE tb_equipments (
     id INTEGER AUTO_INCREMENT PRIMARY KEY,
-    toolset VARCHAR(64) REFERENCES tb_toolsets(code) NOT NULL,  -- Simple FK to toolset code
-
-    guid VARCHAR(64) UNIQUE NOT NULL,
+    toolset VARCHAR(64) NOT NULL,  -- Simple FK to toolset code
+    name VARCHAR(128) NOT NULL,
+    guid VARCHAR(64) NOT NULL,
     node_id INTEGER NOT NULL,           -- Virtual equipment node
-    data_code INTEGER NOT NULL,
-    category_no INTEGER NOT NULL,
-    vertices INTEGER NOT NULL,
-    
     kind VARCHAR(32),                   -- PRODUCTION, PROCESSING, SUPPLY, etc.
     
-    name VARCHAR(128),                  -- Optional name
-    description VARCHAR(512),           -- Optional description
-    is_active BIT(1) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-);
     
-CREATE INDEX idx_equipments_toolset ON tb_equipments (toolset);
+    FOREIGN KEY (toolset) REFERENCES tb_toolsets(code),
+    INDEX idx_equipments_toolset (toolset),
+    UNIQUE KEY uk_equipments_guid (guid)
+);
 
 -- Equipment PoCs: Same as before
 CREATE TABLE tb_equipment_pocs (
     id INTEGER AUTO_INCREMENT PRIMARY KEY,
-    equipment_id INTEGER REFERENCES tb_equipment(id) ON DELETE CASCADE NOT NULL,
-
-    node_id INTEGER NOT NULL,   -- Actual network node ID
-    is_used BIT(1) NOT NULL,
-
+    equipment_id INTEGER NOT NULL,
+    code VARCHAR(8) NOT NULL,           -- POC01, POC02, IN01, OUT01
+    node_id INTEGER NOT NULL,           -- Actual network node ID
     
-    eq_poc_no VARCHAR(128)  -- Raw equipment poc refereces it might contain various items to match dimentions or branches
-    utility VARCHAR(32),    -- N2, CDA, PW, etc. - NULL if unused
-    reference VARCHAR(8) NOT NULL,           -- POC01, POC02, IN01, OUT01
-    flow VARCHAR(8),        -- IN, OUT - NULL if unused
+    utility VARCHAR(32),        -- N2, CDA, PW, etc. - NULL if unused
+    flow VARCHAR(8),            -- IN, OUT - NULL if unused
+    is_used BOOLEAN DEFAULT FALSE,
     
-    is_active BIT(1) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-);
     
-CREATE INDEX idx_pocs_equipment ON tb_equipment_pocs (equipment_id),
-CREATE UNIQUE INDEX idx_pocs_node ON tb_equipment_pocs (node_id),
+    FOREIGN KEY (equipment_id) REFERENCES tb_equipment(id) ON DELETE CASCADE,
+    INDEX idx_pocs_equipment (equipment_id),
+    INDEX idx_pocs_node (node_id),
+    UNIQUE KEY uk_equipment_poc_code (equipment_id, code),
+    UNIQUE KEY uk_poc_node (node_id)
+);
 
 -- Sample toolset data with A/B/C/D phases
 INSERT INTO tb_toolsets (code, fab, phase, name, description) VALUES
@@ -73,26 +64,54 @@ INSERT INTO tb_toolsets (code, fab, phase, name, description) VALUES
 ('TS004', 'M16', 'C', 'Processing Line 1', 'Post-processing toolset'),
 ('TS005', 'M16', 'D', 'Final Assembly', 'Final assembly toolset');
 
+-- Much simpler queries:
+
+-- Query 1: Get toolset by code
+-- SELECT * FROM tb_toolsets WHERE code = 'TS001';
+
+-- Query 2: Get all toolsets for a fab
+-- SELECT * FROM tb_toolsets WHERE fab = 'M16';
+
+-- Query 3: Get all toolsets for phase A (PHASE1)
+-- SELECT * FROM tb_toolsets WHERE phase = 'A';
+
+-- Query 4: Get equipment for a toolset
+-- SELECT e.* FROM tb_equipment e WHERE e.toolset_code = 'TS001';
+
+-- Query 5: Get toolsets by fab and phase
+-- SELECT * FROM tb_toolsets WHERE fab = 'M16' AND phase = 'B';
+
+-- Query 6: Join equipment with toolset info
+-- SELECT e.*, t.fab, t.phase, t.name as toolset_name 
+-- FROM tb_equipment e 
+-- JOIN tb_toolsets t ON e.toolset_code = t.code;
+
+-- No phase mapping table needed!
+-- Phase conversion handled in Python enum:
+-- Phase.PHASE1.value → 'A'
+-- Phase.normalize('PHASE1') → Phase.PHASE1 (value='A')
+-- Phase.normalize('1') → Phase.PHASE1 (value='A')
+-- Phase.normalize('A') → Phase.PHASE1 (value='A')
+
+```sql
 -- Updated Database Schema for Path Analysis CLI v2.0
 -- Supports Building enum, enhanced scenario handling, and improved run tracking
 
 -- 1. Runs: CLI execution metadata and coverage summary
 CREATE TABLE tb_runs (
     id VARCHAR(36) PRIMARY KEY,
-
     date DATE NOT NULL,
     approach VARCHAR(20) NOT NULL,      -- RANDOM, SCENARIO
     method VARCHAR(20) NOT NULL,        -- SIMPLE, STRATIFIED, PREDEFINED, SYNTHETIC, FILE
+    coverage_target FLOAT NOT NULL,     -- Only relevant for RANDOM approach
 
     total_coverage FLOAT NOT NULL,
     total_nodes INTEGER NOT NULL,
     total_links INTEGER NOT NULL,
 
-    coverage_target FLOAT,     -- Only relevant for RANDOM approach - NULL for SCENARIO
-    model VARCHAR (8),                  -- Data model type identified (BOM, 5D) - NULL for SCENARIO
     fab VARCHAR(64),                    -- Building identifier (M15, M15X, M16) - NULL for SCENARIO
     toolset VARCHAR(128),               -- Toolset identifier - NULL for SCENARIO
-    phase VARCHAR (8)                   -- Phase identifier - NULL for SCENARIO
+    phase VARCHAR (8)            -- Phase identifier - NULL for SCENARIO
     
     -- Scenario-specific fields
     scenario_code VARCHAR(128),         -- Scenario code (PREXXXXXXX, SYNXXXXXXX) - NULL for RANDOM
@@ -100,7 +119,7 @@ CREATE TABLE tb_runs (
     scenario_type VARCHAR(20),          -- PREDEFINED, SYNTHETIC (auto-detected from code) - NULL for RANDOM
 
     tag VARCHAR(256) NOT NULL,          -- Auto-generated tag
-    status VARCHAR(20) NOT NULL,        -- RUNNING, COMPLETED, FAILED
+    status VARCHAR(20) NOT NULL,        -- RUNNING, DONE, FAILED
 
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     ended_at TIMESTAMP,
@@ -120,6 +139,7 @@ CREATE TABLE tb_scenarios (
     id INTEGER AUTO_INCREMENT PRIMARY KEY,
     code VARCHAR(128) UNIQUE NOT NULL,  -- PREXXXXXXX, SYNXXXXXXX, FILXXXXXXX
     name VARCHAR(128) NOT NULL,
+    description VARCHAR(512),
     
     scenario_type VARCHAR(20) NOT NULL, -- PREDEFINED, SYNTHETIC, FILE
     file_path VARCHAR(512),             -- Optional file path for file-based scenarios
@@ -131,16 +151,14 @@ CREATE TABLE tb_scenarios (
     expected_paths INTEGER,             -- Expected number of paths
     
     -- Validation settings
-    expected_valid BIT(1) NOT NULL,     -- Should this scenario pass validation
+    expected_valid BOOLEAN DEFAULT TRUE, -- Should this scenario pass validation
     expected_criticality VARCHAR(32),   -- Expected criticality level
     
-    description VARCHAR(512),
-
     -- Ownership and lifecycle
     created_by VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    is_active BIT(1) NOT NULL
+    is_active BOOLEAN DEFAULT TRUE
 );
 
 
@@ -269,14 +287,14 @@ CREATE TABLE tb_validation_tests (
     test_type VARCHAR(32),              -- STRUCTURAL, LOGICAL, PERFORMANCE, COMPLIANCE
     
     -- Applicability
-    applies_to_random BIT(1) NOT NULL,
-    applies_to_scenario BIT(1) NOT NULL,
-    building_specific BIT(1) NOT NULL,
+    applies_to_random BOOLEAN DEFAULT TRUE,
+    applies_to_scenario BOOLEAN DEFAULT TRUE,
+    building_specific BOOLEAN DEFAULT FALSE,
     
     -- Test configuration
     test_config TEXT,                   -- JSON configuration for the test
     
-    is_active BIT(1) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
