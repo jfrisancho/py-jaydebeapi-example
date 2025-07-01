@@ -19,7 +19,26 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db import Database
 
 
-def get_equipment_mapping(db: Database) -> Dict[str, int]:
+def create_parser() -> argparse.ArgumentParser:
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description="Load equipment POC data into tb_equipment_pocs table",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python load_equipment_pocs.py     # Interactive mode with confirmation
+  python load_equipment_pocs.py -y  # Unattended mode, auto-confirm
+        """
+    )
+    parser.add_argument(
+        '-y', '--yes', 
+        action='store_true',
+        help='Auto-confirm without prompting (unattended mode)'
+    )
+    return parser
+
+def fetch_equipment_mapping(db: Database) -> Dict[str, int]:
     """
     Get mapping of equipment_guid -> equipment_id for FK validation.
     
@@ -48,7 +67,7 @@ def get_equipment_mapping(db: Database) -> Dict[str, int]:
         raise
 
 
-def get_source_data(db: Database) -> List[Tuple]:
+def fetch_source_data(db: Database) -> List[Tuple]:
     """
     Fetch source data for equipment POCs from nw_nodes and related tables.
     
@@ -412,22 +431,7 @@ def main():
     """
     Main function to orchestrate the equipment POC loading process.
     """
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(
-        description="Load equipment POC data into tb_equipment_pocs table",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python load_equipment_pocs.py     # Interactive mode with confirmation
-  python load_equipment_pocs.py -y  # Unattended mode, auto-confirm
-        """
-    )
-    parser.add_argument(
-        '-y', '--yes', 
-        action='store_true',
-        help='Auto-confirm without prompting (unattended mode)'
-    )
-    
+    parser = create_parser()    
     args = parser.parse_args()
     
     print("Starting equipment POC loading process...")
@@ -441,7 +445,7 @@ Examples:
         
         # Load equipment mappings first
         print("\nLoading equipment mappings...")
-        equipment_mapping = get_equipment_mapping(db)
+        equipment_mapping = fetch_equipment_mapping(db)
         
         if not equipment_mapping:
             print("✗ No active equipments found. Please load equipments first.")
@@ -449,7 +453,7 @@ Examples:
         
         # Fetch source data
         print("\nFetching equipment POC source data...")
-        raw_data = get_source_data(db)
+        raw_data = fetch_source_data(db)
         
         if not raw_data:
             print("No source data found. Exiting.")
