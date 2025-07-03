@@ -71,6 +71,7 @@ CREATE UNIQUE INDEX idx_pocs_node (node_id);
 CREATE INDEX idx_pocs_equipment_poc_node_id (equipment_id, node_id);
 
 CREATE TABLE tb_equipment_connections (
+CREATE TABLE tb_equipment_poc_connections (
     id INTEGER AUTO_INCREMENT PRIMARY KEY,
 
     from_equipment_id INTEGER NOT NULL REFERENCES tb_equipments(id) ON DELETE CASCADE,
@@ -79,11 +80,10 @@ CREATE TABLE tb_equipment_connections (
     from_poc_id INTEGER NOT NULL REFERENCES tb_equipment_pocs(id) ON DELETE CASCADE,
     to_poc_id   INTEGER NOT NULL REFERENCES tb_equipment_pocs(id) ON DELETE CASCADE,
 
-    is_valid BIT(1) NOT NULL,  -- Mark whether the path is usable or blocked
-
     connection_type VARCHAR(16), -- Optional: STRAIGHT, BRANCHED, LOOPBACK, etc.
     
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    is_valid BIT(1) NOT NULL,  -- Mark whether the path is usable or blocked
+    created_at TIMESTAMP DEFAULT now() NOT NULL
 );
 
 CREATE INDEX idx_eq_conn_from_to ON tb_equipment_connections (from_equipment_id, to_equipment_id);
